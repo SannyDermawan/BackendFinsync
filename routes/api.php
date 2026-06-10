@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Http\Controllers\TransactionController;
+use App\Models\NotificationSetting;
+use App\Http\Controllers\SavingController;
+use App\Http\Controllers\PasswordController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\PasswordResetController;
 
 // ==========================
 // TRANSACTIONS
@@ -15,20 +20,43 @@ use App\Http\Controllers\TransactionController;
 Route::post('/transactions', [TransactionController::class, 'store']);
 Route::get('/transactions/{wallet_id}', [TransactionController::class, 'index']);
 
+//SAVINGS
+Route::post(
+    '/savings',
+    [SavingController::class, 'store']
+);
+
+Route::get(
+    '/savings/{user_id}',
+    [SavingController::class, 'total']
+);
+
+Route::get(
+    '/savings-history/{user_id}',
+    [SavingController::class, 'history']
+);
+
+Route::delete(
+    '/savings/{id}',
+    [SavingController::class, 'destroy']
+);
 
 // ==========================
 // WALLET (AMBIL SALDO PER WALLET)
 // ==========================
-Route::get('/wallet/{user_id}/{wallet}', function($user_id, $wallet){
+Route::get('/wallet/{wallet_id}', function($wallet_id){
 
-    $data = Wallet::where('user_id', $user_id)
-        ->where('wallet', $wallet)
-        ->first();
+    $wallet = Wallet::find($wallet_id);
+
+    if(!$wallet){
+        return response()->json([
+            'saldo' => 0
+        ]);
+    }
 
     return response()->json([
-        'saldo' => $data ? $data->saldo : 0
+        'saldo' => $wallet->saldo
     ]);
-
 });
 
 
@@ -40,6 +68,28 @@ Route::post('/connect-wallet', function(Request $request){
     $user_id = $request->user_id;
     $wallet_id = $request->wallet_id;
 
+    $wallet = Wallet::find($wallet_id);
+
+    if(!$wallet){
+        return response()->json([
+            'message' => 'Wallet tidak ditemukan'
+        ],404);
+    }
+
+    // MATIKAN WALLET SEJENIS YANG SUDAH CONNECT
+    $sameWalletIds = Wallet::where(
+        'wallet',
+        $wallet->wallet
+    )->pluck('id');
+
+    DB::table('wallet_connections')
+        ->where('user_id', $user_id)
+        ->whereIn('wallet_id', $sameWalletIds)
+        ->update([
+            'connected' => 0,
+            'updated_at' => now()
+        ]);
+
     $existing = DB::table('wallet_connections')
         ->where('user_id', $user_id)
         ->where('wallet_id', $wallet_id)
@@ -50,7 +100,7 @@ Route::post('/connect-wallet', function(Request $request){
         DB::table('wallet_connections')
             ->where('id', $existing->id)
             ->update([
-                'connected' => true,
+                'connected' => 1,
                 'updated_at' => now()
             ]);
 
@@ -59,7 +109,7 @@ Route::post('/connect-wallet', function(Request $request){
         DB::table('wallet_connections')->insert([
             'user_id' => $user_id,
             'wallet_id' => $wallet_id,
-            'connected' => true,
+            'connected' => 1,
             'created_at' => now(),
             'updated_at' => now()
         ]);
@@ -71,6 +121,21 @@ Route::post('/connect-wallet', function(Request $request){
     ]);
 });
 
+//DISCONNECT WALLET
+Route::post('/disconnect-wallet', function(Request $request){
+
+    DB::table('wallet_connections')
+        ->where('user_id', $request->user_id)
+        ->where('wallet_id', $request->wallet_id)
+        ->update([
+            'connected' => 0,
+            'updated_at' => now()
+        ]);
+
+    return response()->json([
+        'message' => 'Wallet disconnected'
+    ]);
+});
 
 // ==========================
 // GET WALLET STATUS
@@ -78,40 +143,23 @@ Route::post('/connect-wallet', function(Request $request){
 Route::get('/wallet-status/{user_id}', function($user_id){
 
     $data = DB::table('wallet_connections')
-        ->where('user_id', $user_id)
+        ->join(
+            'wallets',
+            'wallet_connections.wallet_id',
+            '=',
+            'wallets.id'
+        )
+        ->where('wallet_connections.user_id', $user_id)
+        ->select(
+            'wallet_connections.wallet_id',
+            'wallet_connections.connected',
+            'wallets.wallet',
+            'wallets.account_name',
+            'wallets.saldo'
+        )
         ->get();
 
     return response()->json($data);
-});
-
-
-// ==========================
-// SALDO OVO
-// ==========================
-Route::get('/ovo/saldo/{user_id}', function($user_id){
-
-    $wallet = Wallet::where('user_id', $user_id)
-        ->where('wallet', 'ovo')
-        ->first();
-
-    return response()->json([
-        'saldo' => $wallet ? $wallet->saldo : 0
-    ]);
-});
-
-
-// ==========================
-// SALDO DANA
-// ==========================
-Route::get('/dana/saldo/{user_id}', function($user_id){
-
-    $wallet = Wallet::where('user_id', $user_id)
-        ->where('wallet', 'dana')
-        ->first();
-
-    return response()->json([
-        'saldo' => $wallet ? $wallet->saldo : 0
-    ]);
 });
 
 
@@ -293,3 +341,82 @@ Route::post('/wallet/login', function(Request $request){
         'wallet' => $wallet
     ]);
 });
+
+//NOTIFICATION SETTINGS
+Route::get('/notification-settings/{user_id}', function ($user_id) {
+
+    $setting =
+        NotificationSetting::firstOrCreate(
+            ['user_id' => $user_id]
+        );
+
+    return response()->json($setting);
+});
+
+//UPDATE NOTIFICATION SETTINGS
+Route::put(
+'/notification-settings/{user_id}',
+function(Request $request, $user_id){
+
+    $setting =
+        NotificationSetting::firstOrCreate(
+            ['user_id' => $user_id]
+        );
+
+    $setting->update([
+
+        'daily_summary' =>
+            $request->daily_summary,
+
+        'weekly_report' =>
+            $request->weekly_report,
+
+        'spending_alert' =>
+            $request->spending_alert,
+
+        'alert_threshold' =>
+            $request->alert_threshold,
+
+        'monthly_budget' =>
+            $request->monthly_budget,
+
+        'savings_goal_enabled' =>
+            $request->savings_goal_enabled,
+
+        'monthly_savings_goal' =>
+            $request->monthly_savings_goal
+
+    ]);
+
+    return response()->json([
+        'message' => 'saved'
+    ]);
+});
+
+//CHANGE PASSWORD
+Route::post(
+    '/change-password',
+    [PasswordController::class, 'change']
+);
+
+//REPORT
+Route::get(
+    '/report/{userId}',
+    [ReportController::class, 'generate']
+);
+
+//PASSWORD RESET
+Route::post(
+    '/forgot-password',
+    [PasswordResetController::class, 'sendOtp']
+);
+
+Route::post(
+    '/verify-otp',
+    [PasswordResetController::class, 'verifyOtp']
+);
+
+Route::post(
+    '/reset-password',
+    [PasswordResetController::class, 'resetPassword']
+);

@@ -6,23 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-    Schema::create('wallet_connections', function (Blueprint $table) {
-        $table->id();
-        $table->unsignedBigInteger('user_id');
-        $table->string('wallet'); // ovo / dana
-        $table->boolean('connected')->default(true);
-        $table->timestamps();
-    });
+        Schema::create('wallet_connections', function (Blueprint $table) {
+
+            $table->id();
+
+            $table->unsignedBigInteger('user_id');
+
+            $table->unsignedBigInteger('wallet_id');
+
+            $table->boolean('connected')->default(true);
+
+            $table->timestamps();
+
+        });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('wallet_connections');

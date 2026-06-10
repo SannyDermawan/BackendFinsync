@@ -11,9 +11,16 @@ return new class extends Migration
      */
     public function up(): void
 {
-    Schema::table('transactions', function (Blueprint $table) {
-        $table->string('category')->nullable();
-        $table->string('target')->nullable();
+    Schema::create('savings', function (Blueprint $table) {
+
+        $table->id();
+
+        $table->unsignedBigInteger('user_id');
+
+        $table->bigInteger('amount');
+
+        $table->timestamps();
+
     });
 }
 
@@ -22,8 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('transactions', function (Blueprint $table) {
-            //
-        });
+        Schema::dropIfExists('savings');
     }
 };

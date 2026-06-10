@@ -6,22 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-    Schema::create('wallets', function (Blueprint $table) {
-        $table->id();
-        $table->unsignedBigInteger('user_id'); // 🔥 relasi ke user
-        $table->bigInteger('saldo')->default(0); // 🔥 saldo
-        $table->timestamps();
-    });
+        Schema::create('wallets', function (Blueprint $table) {
+
+            $table->id();
+
+            $table->string('wallet');
+            $table->string('account_name');
+            $table->string('password');
+
+            $table->bigInteger('saldo')->default(0);
+
+            $table->timestamps();
+
+        });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('wallets');

@@ -9,11 +9,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('transactions', function (Blueprint $table) {
+
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+
+            $table->unsignedBigInteger('wallet_id');
+
             $table->string('type');
-            $table->integer('amount');
+
+            $table->bigInteger('amount');
+
+            $table->string('category')->nullable();
+
+            $table->string('target')->nullable();
+
             $table->timestamps();
+
         });
     }
 
